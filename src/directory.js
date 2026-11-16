@@ -62,7 +62,11 @@ export const normalizeFileName = (fileName) => {
 };
 
 export const getDuplicateGroups = (files) => {
-  const sortedFiles = [...files].sort((left, right) => left.path.localeCompare(right.path));
+  const filesByPath = new Map(files.map((file) => [file.path, file]));
+  const sortedFiles = files
+    .map((file) => file.path)
+    .sort()
+    .map((filePath) => filesByPath.get(filePath));
   const mainByHash = new Map();
   const mainByName = new Map();
   const groupSizes = new Map();

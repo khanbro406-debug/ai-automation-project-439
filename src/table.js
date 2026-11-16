@@ -1,56 +1,54 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { parse as parseCsv } from "csv-parse/sync";
+import { stringify } from "csv-stringify/sync";
 
 // Готовый блок из стартера: чтение табличных файлов и запись csv, общее для обеих команд.
 
-const splitLines = (content) =>
-  content
-    .split("\n")
-    .map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line))
-    .filter((line) => line !== "");
-
 // Часть выгрузок пришла из Excel: с BOM в начале и с точкой с запятой вместо запятой.
-export const readTable = (filepath) => {
-  const content = readFileSync(filepath, "utf8");
-  const text = content.startsWith("﻿") ? content.slice(1) : content;
+export const parseTable = (content, extension) => {
+  if (extension.toLowerCase() === ".json") {
+    const records = JSON.parse(content);
 
-  if (path.extname(filepath).toLowerCase() === ".json") {
-    const records = JSON.parse(text);
-    const [first] = records;
-    const columns = first ? Object.keys(first) : [];
+    if (!Array.isArray(records)) {
+      throw new TypeError("JSON table must contain an array of objects");
+    }
+
+    const columns = records.length > 0 ? Object.keys(records[0]) : [];
 
     return {
       columns,
-      rows: records.map((record) => columns.map((column) => String(record[column] ?? ""))),
+      rows: records.map((record) =>
+        columns.map((column) => String(record[column] ?? "")),
+      ),
     };
   }
 
-  const lines = splitLines(text);
-  const [header = ""] = lines;
-  const separator = header.split(";").length > header.split(",").length ? ";" : ",";
+  if (extension.toLowerCase() === ".csv") {
+    const records = parseCsv(content, {
+      bom: true,
+      delimiter: [",", ";"],
+      skip_empty_lines: true,
+      relax_column_count: true,
+    });
 
-  return {
-    columns: header.split(separator).map((column) => column.trim()),
-    rows: lines.slice(1).map((line) => line.split(separator)),
-  };
+    return {
+      columns: records[0] ?? [],
+      rows: records.slice(1),
+    };
+  }
+
+  throw new TypeError(`Unsupported table extension: ${extension}`);
 };
 
-const toCsvValue = (value) => {
-  const text = String(value);
-
-  return text.includes(",") || text.includes('"') || text.includes("\n")
-    ? `"${text.split('"').join('""')}"`
-    : text;
-};
+export const readTable = (filepath) =>
+  parseTable(readFileSync(filepath, "utf8"), path.extname(filepath));
 
 export const writeCsv = (out, filename, columns, rows) => {
   const target = path.join(out, filename);
-  const lines = [columns, ...rows].map((values) => values.map(toCsvValue).join(","));
 
   mkdirSync(out, { recursive: true });
-  // Текстовый файл заканчивается переводом строки: иначе последняя запись склеивается
-  // с тем, что допишут следом, а `wc -l` считает на строку меньше.
-  writeFileSync(target, `${lines.join("\n")}\n`);
+  writeFileSync(target, stringify([columns, ...rows]));
 
   return target;
 };
