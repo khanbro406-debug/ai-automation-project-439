@@ -1,0 +1,20 @@
+{
+  "name": "@hexlet/code",
+  "version": "1.0.0",
+  "description": "Консольная программа: реестр документов компании и чистая таблица контактов",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "file-automation": "bin/file-automation.js"
+  },
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0"
+  },
+  "dependencies": {
+    "commander": "^15.0.0"
+  }
+}
