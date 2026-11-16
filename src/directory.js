@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { hashFile } from "./content.js";
+
 const systemFiles = [".ds_store", "thumbs.db", "desktop.ini"];
 const allowedDocumentExtensions = [
   ".csv",
@@ -48,6 +50,60 @@ const getFileStatus = (file) => {
   }
 
   return "document";
+};
+
+export const normalizeFileName = (fileName) => {
+  const extension = path.extname(fileName);
+  const baseName = extension ? fileName.slice(0, -extension.length) : fileName;
+  const normalizedBase = baseName.toLowerCase().replace(/^копия\s+/, "");
+  const trimmedBase = normalizedBase.replace(/\s+\(\d+\)$/, "");
+
+  return `${trimmedBase}${extension ? extension.toLowerCase() : ""}`;
+};
+
+export const getDuplicateGroups = (files) => {
+  const sortedFiles = [...files].sort((left, right) => left.path.localeCompare(right.path));
+  const mainByHash = new Map();
+  const mainByName = new Map();
+  const groupSizes = new Map();
+  let duplicatesCount = 0;
+
+  const result = sortedFiles.map((file) => {
+    const hash = hashFile(file.path);
+    const normalizedName = normalizeFileName(file.name);
+    const mainByHashPath = mainByHash.get(hash);
+    const mainByNamePath = mainByName.get(normalizedName);
+    const mainPath = mainByHashPath ?? mainByNamePath;
+
+    if (mainPath) {
+      duplicatesCount += 1;
+      groupSizes.set(mainPath, (groupSizes.get(mainPath) ?? 1) + 1);
+
+      return {
+        ...file,
+        hash,
+        normalizedName,
+        duplicateOf: mainPath,
+        isDuplicate: true,
+      };
+    }
+
+    mainByHash.set(hash, file.path);
+    mainByName.set(normalizedName, file.path);
+    groupSizes.set(file.path, 1);
+
+    return {
+      ...file,
+      hash,
+      normalizedName,
+      duplicateOf: null,
+      isDuplicate: false,
+    };
+  });
+
+  const groups = [...groupSizes.entries()].filter(([, size]) => size > 1).length;
+
+  return { files: result, duplicates: duplicatesCount, groups };
 };
 
 export const getFiles = (directory) => {
