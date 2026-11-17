@@ -1,6 +1,6 @@
 import { getFiles } from "./directory.js";
 import { contactColumnMap } from "./contact-columns.js";
-import { readTable, writeCsv } from "./table.js";
+import { readTable, writeCsv, writeReports } from "./table.js";
 
 const INVALID_VALUES = new Set([
   "",
@@ -214,12 +214,28 @@ export const runContacts = ({ directory, out = "./out" }) => {
     ["имя", "телефон", "почта", "источники"],
     contactRows,
   );
+  const reportData = {
+    exports: sources,
+    recordsRead: recordCount,
+    uniqueContacts: uniqueContacts.length,
+    rejectedValues,
+    recordsWithoutContactDetails,
+  };
+  const reportText = [
+    `Из ${sources.length} выгрузок прочитано ${recordCount} записей, после склейки осталось ${uniqueContacts.length} контактов.`,
+    "",
+    ...sources.map(({ name, records }) => `  ${name}: записей ${records}`),
+    `Отбраковано значений: ${rejectedValues}, записей без телефона и почты: ${recordsWithoutContactDetails}`,
+  ].join("\n");
+  const reportPaths = writeReports(out, reportText, reportData);
 
   console.log(
     `Отбраковано значений: ${rejectedValues}, записей без телефона и почты: ${recordsWithoutContactDetails}`,
   );
   console.log(`Уникальных контактов: ${uniqueContacts.length}`);
   console.log(`Таблица: ${tablePath.replace(/\\/g, "/")}`);
+  console.log(`Отчёт: ${reportPaths.textPath.replace(/\\/g, "/")}`);
+  console.log(`Отчёт для программ: ${reportPaths.jsonPath.replace(/\\/g, "/")}`);
 
   return uniqueContacts;
 };

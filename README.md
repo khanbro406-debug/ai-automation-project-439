@@ -18,16 +18,28 @@
 
 ## Установка
 
-<!-- Опишите установку: клонирование, зависимости, переменные окружения -->
+Нужен Node.js 20.1 или новее. Папка `company-files` с данными компании не включена
+в репозиторий: возьмите её из материалов задания Хекслета и разместите в корне проекта
+рядом с `package.json`.
 
-```bash
+```powershell
 git clone https://github.com/khanbro406-debug/ai-automation-project-439.git
 cd ai-automation-project-439
+npm install
 ```
 
 ## Использование
 
-<!-- Добавьте примеры запуска и запись asciinema — именно это смотрит работодатель -->
+Из корня проекта запустите обе команды. По умолчанию результаты сохраняются в `.\out`:
+
+```powershell
+node .\bin\file-automation.js files .\company-files --out .\out
+node .\bin\file-automation.js contacts .\company-files --out .\out
+```
+
+Команда `files` создаёт `registry.csv`, а команда `contacts` — `contacts.csv`.
+Каждая команда также записывает собственные `report.txt` и `report.json` в ту же
+папку результата. Путь можно изменить параметром `--out`.
 
 ---
 

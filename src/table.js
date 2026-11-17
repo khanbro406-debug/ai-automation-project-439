@@ -52,3 +52,14 @@ export const writeCsv = (out, filename, columns, rows) => {
 
   return target;
 };
+
+export const writeReports = (out, text, data) => {
+  const textPath = path.join(out, "report.txt");
+  const jsonPath = path.join(out, "report.json");
+
+  mkdirSync(out, { recursive: true });
+  writeFileSync(textPath, `${text}\n`, "utf8");
+  writeFileSync(jsonPath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+
+  return { textPath, jsonPath };
+};

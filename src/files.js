@@ -1,7 +1,12 @@
 // Команда files: реестр документов папки. Её логику вы пишете по шагам, начиная с шага
 // «Список файлов».
+import path from "node:path";
+
 import { getDuplicateGroups, getFiles } from "./directory.js";
-import { readTable, writeCsv } from "./table.js";
+import { readTable, writeCsv, writeReports } from "./table.js";
+
+const relativeFilePath = (directory, filePath) =>
+  path.relative(path.resolve(directory), path.resolve(filePath)).replace(/\\/g, "/");
 
 const registryHeaders = [
   "путь",
@@ -54,6 +59,61 @@ export const runFiles = ({ directory, out = "./out" }) => {
     ];
   });
   const registryPath = writeCsv(out, "registry.csv", registryHeaders, registryRows);
+  const manualFiles = groupedFiles
+    .filter((file) => file.status === "manual")
+    .map((file) => relativeFilePath(directory, file.path));
+  const unrelatedFiles = groupedFiles
+    .filter((file) => file.status === "post")
+    .map((file) => relativeFilePath(directory, file.path));
+  const duplicateGroups = new Map();
+
+  groupedFiles
+    .filter((file) => file.duplicateOf)
+    .forEach((file) => {
+      const mainPath = file.duplicateOf;
+      const group = duplicateGroups.get(mainPath) ?? {
+        files: [relativeFilePath(directory, mainPath)],
+        extraSize: 0,
+      };
+
+      group.files.push(relativeFilePath(directory, file.path));
+      group.extraSize += file.size;
+      duplicateGroups.set(mainPath, group);
+    });
+
+  const reportData = {
+    totalFiles: groupedFiles.length,
+    types: { tabular, text, unparsable },
+    statuses: { documents, manual: manualFiles.length, unrelated: unrelatedFiles.length },
+    duplicates: {
+      count: duplicates,
+      groups: [...duplicateGroups.values()],
+    },
+    filesForManualReview: manualFiles,
+    unrelatedFiles,
+  };
+  const duplicateLines = reportData.duplicates.groups.flatMap((group) => [
+    ...group.files.map((filePath) => `  ${filePath}`),
+    `  Лишний размер: ${group.extraSize} байт`,
+  ]);
+  const reportText = [
+    `Файлов найдено: ${groupedFiles.length}`,
+    `Табличных документов: ${tabular}, текстовых: ${text}, непарсимых: ${unparsable}`,
+    `Документов: ${documents}, требуют ручного разбора: ${manual}, посторонних: ${post}`,
+    `Дубликатов найдено: ${duplicates} в ${reportData.duplicates.groups.length} группах`,
+    "",
+    `Требуют ручного разбора (${manualFiles.length})`,
+    "Программа эти файлы не прочитала, содержимое придётся посмотреть человеку.",
+    ...manualFiles.map((filePath) => `  ${filePath}`),
+    "",
+    `Посторонние файлы (${unrelatedFiles.length})`,
+    "Эти файлы не относятся к документам компании; их можно удалить.",
+    ...unrelatedFiles.map((filePath) => `  ${filePath}`),
+    "",
+    `Группы дубликатов (${reportData.duplicates.groups.length})`,
+    ...(duplicateLines.length > 0 ? duplicateLines : ["  Нет дубликатов."]),
+  ].join("\n");
+  const reportPaths = writeReports(out, reportText, reportData);
 
   console.log(`Файлов найдено: ${groupedFiles.length}`);
   console.log(
@@ -64,6 +124,8 @@ export const runFiles = ({ directory, out = "./out" }) => {
   );
   console.log(`Дубликатов найдено: ${duplicates} в ${groups} группах`);
   console.log(`Реестр: ${registryPath.replace(/\\/g, "/")}`);
+  console.log(`Отчёт: ${reportPaths.textPath.replace(/\\/g, "/")}`);
+  console.log(`Отчёт для программ: ${reportPaths.jsonPath.replace(/\\/g, "/")}`);
 
   return groupedFiles.length;
 };
