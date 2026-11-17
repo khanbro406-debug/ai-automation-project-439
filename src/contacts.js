@@ -1,6 +1,6 @@
 import { getFiles } from "./directory.js";
 import { contactColumnMap } from "./contact-columns.js";
-import { readTable } from "./table.js";
+import { readTable, writeCsv } from "./table.js";
 
 const INVALID_VALUES = new Set([
   "",
@@ -110,14 +110,17 @@ const normalizeContact = (contact) => {
   return { contact: normalized, rejected, isUsefulRecord };
 };
 
-export const runContacts = ({ directory }) => {
-  const tableFiles = getFiles(directory)
-    .filter((file) => file.type === "tabular" && file.status === "document" && file.size > 0)
-    .sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
+export const runContacts = ({ directory, out = "./out" }) => {
+  const filesByPath = new Map(getFiles(directory).map((file) => [file.path, file]));
+  const tableFiles = [...filesByPath.keys()]
+    .sort()
+    .map((filePath) => filesByPath.get(filePath))
+    .filter((file) => file.type === "tabular" && file.status === "document" && file.size > 0);
   const sources = [];
   const contacts = [];
   const unmatchedColumns = [];
   let rejectedValues = 0;
+  let recordsWithoutContactDetails = 0;
 
   tableFiles.forEach((file) => {
     const { columns, rows } = readTable(file.path);
@@ -154,7 +157,8 @@ export const runContacts = ({ directory }) => {
       const normalizedContact = normalizeContact(contact);
       rejectedValues += normalizedContact.rejected;
 
-      if (!normalizedContact.isUsefulRecord) {
+      if (!normalizedContact.contact.телефон && !normalizedContact.contact.почта) {
+        recordsWithoutContactDetails += 1;
         return;
       }
 
@@ -169,7 +173,53 @@ export const runContacts = ({ directory }) => {
   const recordCount = sources.reduce((total, source) => total + source.records, 0);
   console.log(`Выгрузок прочитано: ${sources.length}, записей: ${recordCount}`);
   console.log(`Колонки без соответствия: ${unmatchedColumns.join(", ")}`);
-  console.log(`Отбраковано значений: ${rejectedValues}`);
 
-  return contacts;
+  const contactsByKey = new Map();
+
+  contacts.forEach((contact) => {
+    const key = contact.телефон
+      ? `phone:${contact.телефон}`
+      : `email:${contact.почта}`;
+    const existing = contactsByKey.get(key);
+
+    if (!existing) {
+      contactsByKey.set(key, {
+        имя: contact.имя,
+        телефон: contact.телефон,
+        почта: contact.почта,
+        источники: [contact.источник],
+      });
+      return;
+    }
+
+    existing.имя ||= contact.имя;
+    existing.телефон ||= contact.телефон;
+    existing.почта ||= contact.почта;
+
+    if (!existing.источники.includes(contact.источник)) {
+      existing.источники.push(contact.источник);
+    }
+  });
+
+  const uniqueContacts = [...contactsByKey.values()];
+  const contactRows = uniqueContacts.map((contact) => [
+    contact.имя,
+    contact.телефон,
+    contact.почта,
+    contact.источники.join("; "),
+  ]);
+  const tablePath = writeCsv(
+    out,
+    "contacts.csv",
+    ["имя", "телефон", "почта", "источники"],
+    contactRows,
+  );
+
+  console.log(
+    `Отбраковано значений: ${rejectedValues}, записей без телефона и почты: ${recordsWithoutContactDetails}`,
+  );
+  console.log(`Уникальных контактов: ${uniqueContacts.length}`);
+  console.log(`Таблица: ${tablePath.replace(/\\/g, "/")}`);
+
+  return uniqueContacts;
 };
