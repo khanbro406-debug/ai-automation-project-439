@@ -111,12 +111,15 @@ export const getDuplicateGroups = (files) => {
 };
 
 export const getFiles = (directory) => {
-  const entries = fs.readdirSync(directory, { withFileTypes: true });
+  const entries = fs.readdirSync(directory, {
+    withFileTypes: true,
+    recursive: true,
+  });
 
   return entries
     .filter((entry) => entry.isFile())
     .map((entry) => {
-      const filePath = path.join(directory, entry.name);
+      const filePath = path.join(entry.parentPath, entry.name);
       const stats = fs.statSync(filePath);
       const file = {
         path: filePath,
